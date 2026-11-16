@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Дембельская пачка</title>
+
+  <style>
+    :root {
+      --bg: #f8f5ef;
+      --ink: #292722;
+      --red: #d94b45;
+      --paper: #fffdf8;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: "Courier New", monospace;
+    }
+
+    body.night {
+      background: #641f26;
+      color: #fff;
+    }
+
+    main {
+      width: min(100%, 560px);
+      text-align: center;
+    }
+
+    .scene {
+      min-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 22px;
+      padding-top: 12vh;
+    }
+
+    /* Экран создания пачки */
+    .scene.creator {
+      min-height: 0;
+      padding-top: 0;
+      justify-content: flex-start;
+      align-items: stretch;
+      gap: 14px;
+      text-align: left;
+    }
+
+    .creator h1 {
+      margin: 0;
+      font-size: 22px;
+      text-align: center;
+    }
+
+    .creator details {
+      border: 2px solid var(--ink);
+      background: var(--paper);
+      padding: 10px;
+    }
+
+    .creator summary {
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .field input,
+    .field textarea {
+      width: 100%;
+      padding: 8px;
+      font: inherit;
+      font-size: 14px;
+      color: var(--ink);
+      background: var(--paper);
+      border: 2px solid var(--ink);
+    }
+
+    .field textarea { resize: vertical; }
+
+    .result {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .result input {
+      width: 100%;
+      padding: 8px;
+      font: inherit;
+      font-size: 12px;
+      border: 2px solid var(--ink);
+      background: var(--paper);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    button {
+      display: block;
+      max-width: 100%;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button:active { transform: scale(.98); }
+    button:disabled { cursor: default; }
+
+    .pack-action,
+    a.pack-action {
+      display: inline-block;
+      padding: 10px 14px;
+      font: inherit;
+      font-size: 15px;
+      color: var(--ink);
+      text-decoration: none;
+      border: 2px solid var(--ink);
+      background: var(--paper);
+      box-shadow: 3px 3px 0 #d8d2c7;
+    }
+
+    .art {
+      display: block;
+      width: min(82vw, 340px);
+      height: min(82vw, 340px);
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+
+    .pack-image { transform: translateX(60px); }
+
+    .cigarette-art {
+      width: min(90vw, 480px);
+      height: auto;
+      max-height: 230px;
+      transform: none;
+    }
+
+    .caption {
+      min-height: 30px;
+      font-size: 18px;
+      line-height: 1.5;
+    }
+
+    .fact {
+      margin-top: 24px;
+      max-width: 320px;
+      color: #716c62;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .heart {
+      color: var(--red);
+      font-family: sans-serif;
+      font-size: 24px;
+    }
+
+    .wish {
+      max-width: 320px;
+      padding: 16px;
+      border: 2px solid var(--ink);
+      background: var(--paper);
+      line-height: 1.5;
+      box-shadow: 4px 4px 0 #d8d2c7;
+    }
+
+    .final-wish {
+      width: min(90vw, 600px);
+      min-height: 260px;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+      font-size: 24px;
+      line-height: 1.6;
+      color: #292722;
+      white-space: pre-line;
+      max-width: none;
+    }
+
+    .hint {
+      margin: 0;
+      color: #716c62;
+      font-size: 12px;
+    }
+
+    body.night .hint { color: #f1d3d3; }
+
+    .pack-countdown { font-variant-numeric: tabular-nums; }
+
+    .error {
+      max-width: 320px;
+      color: #a32626;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .creator .error,
+    .error-msg {
+      color: #a32626;
+      font-size: 14px;
+      line-height: 1.5;
+      margin: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <section class="scene" id="scene" aria-live="polite"></section>
+  </main>
+
+<script>
+  const scene = document.getElementById("scene");
+
+  const DAYS = 20;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const AUTO_CLOSE_SECONDS = 20;
+  const DEFAULT_START = "2026-11-12";
+  const LETTER_IMAGES = ["letter-appear.png", "letter-appear-2.png"];
+
+  // Для проверки добавь к адресу ?test=5 (число от 1 до 20).
+  // Без параметра работает обычный режим по календарю.
+  const TEST_DAY = Number(new URLSearchParams(location.search).get("test")) || 0;
+
+  /* ---------- Утилиты ---------- */
+
+  function el(tag, props = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props)) {
+      if (key === "class") node.className = value;
+      else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+      else node[key] = value;
+    }
+    node.append(...children.filter(c => c !== null && c !== undefined && c !== false));
+    return node;
+  }
+
+  // Кодирование данных в строку для ссылки (UTF-8 → base64url).
+  function encodeData(obj) {
+    const bytes = new TextEncoder().encode(JSON.stringify(obj));
+    let binary = "";
+    bytes.forEach(b => { binary += String.fromCharCode(b); });
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function decodeData(code) {
+    let s = code.replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    const binary = atob(s);
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
+  function parseData(code) {
+    try {
+      const d = decodeData(code);
+      const valid =
+        d &&
+        typeof d.s === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(d.s) &&
+        Array.isArray(d.w) &&
+        d.w.length === DAYS &&
+        d.w.every(x => typeof x === "string") &&
+        typeof d.l === "string";
+
+      if (!valid) return null;
+
+      return {
+        name: typeof d.n === "string" ? d.n : "",
+        start: d.s,
+        wishes: d.w,
+        facts: Array.isArray(d.f) ? d.f : [],
+        letter: d.l
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function hashString(str) {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) {
+      h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+    }
+    return (h >>> 0).toString(36);
+  }
+
+  function makeImageButton(src, alt, className, onClick) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("aria-label", alt);
+
+    const img = el("img", { src, alt, class: className });
+    img.onerror = () => {
+      button.replaceWith(el("p", { class: "error", textContent: `Не удалось загрузить «${src}».` }));
+    };
+
+    button.append(img);
+    button.addEventListener("click", onClick);
+    return button;
+  }
+
+  /* ---------- Режим создания ---------- */
+
+  function showCreator(notice = "") {
+    document.body.classList.remove("night");
+    scene.className = "scene creator";
+    scene.style.cursor = "";
+    scene.onclick = null;
+
+    const nameInput = el("input", { type: "text", maxLength: 40, placeholder: "Например, Саша" });
+    const startInput = el("input", { type: "date", value: DEFAULT_START });
+    const letterInput = el("textarea", {
+      rows: 8,
+      placeholder: "Последнее письмо, которое откроется в конце пачки"
+    });
+
+    const wishInputs = [];
+    const factInputs = [];
+
+    const wishFields = Array.from({ length: DAYS }, (_, i) => {
+      const ta = el("textarea", { rows: 2, placeholder: `Пожелание на день ${i + 1}` });
+      wishInputs.push(ta);
+      return el("label", { class: "field" }, `День ${i + 1} — пожелание *`, ta);
+    });
+
+    const factFields = Array.from({ length: DAYS }, (_, i) => {
+      const ta = el("textarea", { rows: 2, placeholder: "Необязательно" });
+      factInputs.push(ta);
+      return el("label", { class: "field" }, `День ${i + 1} — факт`, ta);
+    });
+
+    const errorEl = el("p", { class: "error-msg", textContent: notice });
+    const resultBox = el("div", { class: "result" });
+    const createBtn = el("button", { type: "button", class: "pack-action", textContent: "Создать ссылку ♥" });
+
+    createBtn.addEventListener("click", () => {
+      errorEl.textContent = "";
+      resultBox.replaceChildren();
+
+      const name = nameInput.value.trim();
+      const start = startInput.value;
+      const wishes = wishInputs.map(t => t.value.trim());
+      const facts = factInputs.map(t => t.value.trim());
+      const letter = letterInput.value.trim();
+
+      if (!name) { errorEl.textContent = "Укажи имя."; return; }
+      if (!start) { errorEl.textContent = "Выбери дату начала."; return; }
+
+      const emptyDay = wishes.findIndex(w => !w);
+      if (emptyDay !== -1) {
+        errorEl.textContent = `Заполни пожелание на день ${emptyDay + 1}.`;
+        wishInputs[emptyDay].focus();
+        return;
+      }
+      if (!letter) { errorEl.textContent = "Напиши финальное письмо."; letterInput.focus(); return; }
+
+      const code = encodeData({ n: name, s: start, w: wishes, f: facts, l: letter });
+      const base = location.href.split("#")[0].split("?")[0];
+      const link = `${base}#${code}`;
+
+      const linkInput = el("input", { type: "text", readOnly: true, value: link });
+      linkInput.addEventListener("click", () => linkInput.select());
+
+      const copyBtn = el("button", { type: "button", class: "pack-action", textContent: "Копировать" });
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(link);
+        } catch {
+          linkInput.select();
+          document.execCommand("copy");
+        }
+        copyBtn.textContent = "Скопировано ♥";
+      });
+
+      const openLink = el("a", {
+        class: "pack-action",
+        href: link,
+        target: "_blank",
+        rel: "noopener",
+        textContent: "Открыть пачку"
+      });
+
+      resultBox.replaceChildren(
+        el("p", { class: "hint", textContent: "Готово! Эту ссылку можно отправить парню ♥" }),
+        linkInput,
+        el("div", { class: "actions" }, copyBtn, openLink)
+      );
+
+      resultBox.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+
+    scene.replaceChildren(
+      el("h1", { textContent: "Создай свою дембельскую пачку" }),
+      el("p", { class: "hint", textContent: "Заполни тексты, создай ссылку и отправь её. Ссылка открывает пачку с твоими пожеланиями." }),
+      el("label", { class: "field" }, "Твоё имя *", nameInput),
+      el("label", { class: "field" }, "Дата первой сигареты *", startInput),
+      ...wishFields,
+      el("details", {}, el("summary", { textContent: "Факты для каждого дня (необязательно)" }), ...factFields),
+      el("label", { class: "field" }, "Финальное письмо *", letterInput),
+      errorEl,
+      el("div", { class: "actions" }, createBtn),
+      resultBox
+    );
+  }
+
+  /* ---------- Режим пачки ---------- */
+
+  function showPack(data, code) {
+    const [y, m, d] = data.start.split("-").map(Number);
+    const START = new Date(y, m - 1, d);
+    const mode = TEST_DAY ? "test" : "calendar";
+    const storagePrefix = `daily-pack:${hashString(code)}:${mode}`;
+
+    const memory = new Set();
+    const timers = { countdown: null, autoClose: null };
+
+    function clearTimers() {
+      clearInterval(timers.countdown);
+      clearTimeout(timers.autoClose);
+      timers.countdown = null;
+      timers.autoClose = null;
+    }
+
+    function todayIndex() {
+      if (TEST_DAY >= 1 && TEST_DAY <= DAYS) return TEST_DAY - 1;
+
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      if (today < START) return -1;
+
+      // Math.round защищает от перехода на летнее/зимнее время.
+      return Math.min(DAYS - 1, Math.round((today - START) / DAY_MS));
+    }
+
+    function storageKey(index) {
+      return `${storagePrefix}:day-${index + 1}`;
+    }
+
+    function wasOpened(index) {
+      if (index < 0) return false;
+      const key = storageKey(index);
+      if (memory.has(key)) return true;
+      try {
+        return localStorage.getItem(key) === "opened";
+      } catch {
+        return false;
+      }
+    }
+
+    function rememberOpened(index) {
+      const key = storageKey(index);
+      memory.add(key);
+      try {
+        localStorage.setItem(key, "opened");
+      } catch {
+        console.warn("Сохранение недоступно: после перезагрузки пачка может открыться снова.");
+      }
+    }
+
+    function nextMidnight() {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+    }
+
+    function formatTime(ms) {
+      const total = Math.max(0, Math.ceil(ms / 1000));
+      const days = Math.floor(total / 86400);
+      const hours = Math.floor((total % 86400) / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const seconds = total % 60;
+      const pad = v => String(v).padStart(2, "0");
+      const time = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+      return days > 0 ? `${days} дн. ${time}` : time;
+    }
+
+    function startCountdown(hintEl, targetMs, prefix) {
+      const tick = () => {
+        if (!hintEl.isConnected) {
+          clearInterval(timers.countdown);
+          timers.countdown = null;
+          return;
+        }
+        const remaining = targetMs - Date.now();
+        if (remaining <= 0) {
+          showClosedPack();
+          return;
+        }
+        hintEl.textContent = prefix + formatTime(remaining);
+      };
+      tick();
+      timers.countdown = setInterval(tick, 1000);
+    }
+
+    function showClosedPack() {
+      clearTimers();
+      document.body.classList.remove("night");
+      scene.className = "scene";
+      scene.style.cursor = "";
+      scene.onclick = null;
+
+      const index = todayIndex();
+      const lastAvailableDay = Math.min(index, DAYS - 1);
+      const availableDays = [];
+
+      for (let day = 0; day <= lastAvailableDay; day++) {
+        if (!wasOpened(day)) availableDays.push(day);
+      }
+
+      const pack = makeImageButton(
+        "closed.png",
+        "Закрытая пачка",
+        "art pack-image",
+        () => {
+          if (availableDays.length === 1) showOpenPack(availableDays[0]);
+        }
+      );
+      const caption = el("div", { class: "caption" });
+      const hint = el("p", { class: "hint" });
+
+      if (availableDays.length > 0) {
+        if (availableDays.length === 1) {
+          caption.textContent = "Твоя дембельская пачка";
+          hint.textContent = "Нажми на пачку";
+          scene.replaceChildren(pack, caption, hint);
+          return;
+        }
+
+        pack.disabled = true;
+        caption.textContent = "Можно открыть сегодняшнюю или пропущенную сигарету ♥";
+        hint.textContent = "Выбери день";
+
+        const dayButtons = availableDays.map(day =>
+          el("button", {
+            type: "button",
+            class: "pack-action",
+            textContent: `День ${day + 1}`,
+            onclick: () => showOpenPack(day)
+          })
+        );
+
+        scene.replaceChildren(
+          pack,
+          caption,
+          hint,
+          el("div", { class: "actions" }, ...dayButtons)
+        );
+        return;
+      }
+
+      pack.disabled = true;
+
+      if (index === DAYS - 1) {
+        caption.textContent = "Все сигареты открыты ♥";
+        scene.replaceChildren(
+          pack,
+          caption,
+          el("button", {
+            type: "button",
+            class: "pack-action",
+            textContent: "Открыть финальное поздравление ♥",
+            onclick: showBlackScreen
+          })
+        );
+        return;
+      }
+
+      let targetMs;
+      let prefix;
+
+      if (index < 0) {
+        caption.textContent = `Пачка откроется ${START.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })} ♥`;
+        prefix = "До открытия пачки: ";
+        targetMs = START.getTime();
+      } else {
+        caption.textContent = "Сегодняшняя сигарета уже открыта ♥";
+        prefix = "До следующей сигареты: ";
+        targetMs = nextMidnight();
+      }
+
+      scene.replaceChildren(pack, caption, hint);
+      hint.classList.add("pack-countdown");
+      startCountdown(hint, targetMs, prefix);
+    }
+
+    function showOpenPack(index) {
+      clearTimers();
+
+      if (
+        index < 0 ||
+        index > todayIndex() ||
+        index >= DAYS ||
+        wasOpened(index)
+      ) {
+        showClosedPack();
+        return;
+      }
+
+      const remaining = DAYS - index;
+
+      const children = [
+        makeImageButton(
+          `open-${remaining}.png`,
+          `В пачке осталось сигарет: ${remaining}`,
+          "art pack-image",
+          () => showCigarette(index)
+        ),
+        el("div", {
+          class: "caption",
+          textContent: remaining === 1 ? "Последняя сигарета ♥" : `Осталось сигарет: ${remaining}`
+        }),
+        el("p", {
+          class: "hint",
+          textContent: `Сигарета за день ${index + 1}`
+        })
+      ];
+
+      if (data.facts[index]) {
+        children.push(el("div", { class: "fact", textContent: data.facts[index] }));
+      }
+
+      scene.replaceChildren(...children);
+    }
+
+    function showCigarette(index) {
+      const button = makeImageButton(
+        "cigarette.png",
+        "Сигарета",
+        "art cigarette-art",
+        () => showWish(index, button)
+      );
+
+      scene.replaceChildren(
+        button,
+        el("div", { class: "caption", textContent: `День ${index + 1} из ${DAYS}` }),
+        el("p", { class: "hint", textContent: "Нажми на сигарету" })
+      );
+    }
+
+    function showWish(index, button) {
+      if (button.dataset.used) return;
+      button.dataset.used = "1";
+
+      const img = button.querySelector("img");
+      img.src = "cigarette-lit.png";
+      img.alt = "Зажжённая пиксельная сигарета";
+
+      scene.querySelector(".hint")?.remove();
+
+      const wish = el("div", { class: "wish", textContent: data.wishes[index] });
+      scene.append(wish);
+
+      rememberOpened(index);
+
+      scene.append(el("button", {
+        type: "button",
+        class: "pack-action",
+        textContent: "Закрыть пачку ♥",
+        onclick: showClosedPack
+      }));
+
+      if (index === DAYS - 1) {
+        // В последний день нажатие на пожелание ведёт к финалу.
+        wish.tabIndex = 0;
+        wish.setAttribute("role", "button");
+        wish.style.cursor = "pointer";
+        wish.addEventListener("click", showBlackScreen, { once: true });
+        return;
+      }
+
+      scene.append(el("p", {
+        class: "hint",
+        textContent: `Пачка закроется через ${AUTO_CLOSE_SECONDS} секунд ♥`
+      }));
+
+      timers.autoClose = setTimeout(showClosedPack, AUTO_CLOSE_SECONDS * 1000);
+    }
+
+    function showBlackScreen() {
+      clearTimers();
+      document.body.classList.add("night");
+      scene.className = "scene";
+      scene.replaceChildren();
+      scene.style.cursor = "pointer";
+      scene.setAttribute("role", "button");
+      scene.setAttribute("aria-label", "Продолжить");
+      scene.onclick = () => showLetter(0);
+    }
+
+    function showLetter(step) {
+      if (step >= LETTER_IMAGES.length) {
+        showFinal();
+        return;
+      }
+
+      const src = LETTER_IMAGES[step];
+      const img = el("img", { class: "art", src, alt: `Изображение письма ${step + 1}` });
+      img.onerror = () => {
+        img.replaceWith(el("p", { class: "error", textContent: `Не удалось загрузить «${src}».` }));
+      };
+
+      scene.replaceChildren(img);
+      scene.onclick = () => showLetter(step + 1);
+    }
+
+    function showFinal() {
+      scene.onclick = null;
+      scene.style.cursor = "";
+      scene.removeAttribute("role");
+      scene.removeAttribute("aria-label");
+
+      const children = [el("div", { class: "wish final-wish", textContent: data.letter })];
+      if (data.name) {
+        children.push(el("div", { class: "caption", textContent: `${data.name} ♥` }));
+      }
+      scene.replaceChildren(...children);
+    }
+
+    showClosedPack();
+  }
+
+  /* ---------- Старт ---------- */
+
+  function start() {
+    const code = location.hash.slice(1);
+    const data = code ? parseData(code) : null;
+
+    if (data) {
+      showPack(data, code);
+    } else {
+      showCreator(code ? "Ссылка повреждена или неполная. Создай её заново." : "");
+    }
+  }
+
+  window.addEventListener("hashchange", start);
+  start();
+</script>
+</body>
+</html>
